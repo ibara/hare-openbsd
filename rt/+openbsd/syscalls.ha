@@ -337,9 +337,9 @@ export fn nanosleep(req: *const timespec, rem: *timespec) (void | errno) = {
 		req: uintptr: u64, rem: uintptr: u64))?;
 };
 
-export fn getrandom(buf: *void, bufln: size, flags: uint) (size | errno) = {
-	return wrap_return(syscall3(SYS_getrandom,
-		buf: uintptr: u64, bufln: u64, flags: u64))?: size;
+export fn getentropy(buf: *void, buflen: size) (size | errno) = {
+	return wrap_return(syscall2(SYS_getentropy,
+		buf: uintptr: u64, buflen: u64: u64))?: int;
 };
 
 export type fcntl_arg = (void | int | *st_flock | *u64);
@@ -467,11 +467,11 @@ export fn getpeername(sockfd: int, addr: nullable *sockaddr, addrlen: nullable *
 		sockfd: u64, addr: uintptr: u64, addrlen: uintptr: u64))?: int;
 };
 
-export fn sysctlbyname(name: str, oldp: nullable *void, oldlenp: nullable *size,
+export fn sysctl(name: str, namelen: u32, oldp: nullable *void, oldlenp: nullable *size,
 		newp: nullable *const void, newlen: size) (void | errno) = {
 	let kname = kpath(name)?;
-	wrap_return(syscall6(SYS___sysctlbyname,
-		kname: uintptr: u64, len(name): u64,
+	wrap_return(syscall6(SYS_sysctl,
+		kname: uintptr: u64, namelen: u64,
 		oldp: uintptr: u64, oldlenp: uintptr: u64,
 		newp: uintptr: u64, newlen: u64))?;
 };
