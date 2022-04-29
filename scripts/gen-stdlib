@@ -15,7 +15,8 @@ srcdir="$(dirname "$0")"
 eval ". $srcdir/gen-stdlib.sh"
 
 all_platforms="linux
-freebsd"
+freebsd
+openbsd"
 
 gensrcs_rt() {
 	gen_srcs -plinux rt \
@@ -67,6 +68,29 @@ gensrcs_rt() {
 		memset.ha \
 		strcmp.ha \
 		$*
+	gen_srcs -popenbsd rt \
+		+openbsd/abort.ha \
+		+openbsd/env.ha \
+		+openbsd/errno.ha \
+		+openbsd/platformstart.ha \
+		+openbsd/segmalloc.ha \
+		+openbsd/signal.ha \
+		+openbsd/socket.ha \
+		+openbsd/syscallno.ha \
+		+openbsd/syscalls.ha \
+		+openbsd/types.ha \
+		+'$(ARCH)'/jmp.ha \
+		+'$(ARCH)'/backtrace.ha \
+		fenv_defs.ha \
+		+'$(ARCH)'/cpuid.ha \
+		ensure.ha \
+		jmp.ha \
+		malloc.ha \
+		memcpy.ha \
+		memmove.ha \
+		memset.ha \
+		strcmp.ha \
+		$*
 }
 
 rt() {
@@ -88,6 +112,7 @@ rt() {
 	fi
 	gen_ssa -plinux rt
 	gen_ssa -pfreebsd rt
+	gen_ssa -popenbsd rt
 	cat <<EOF
 \$($cache)/rt/start.o: \$(STDLIB)/rt/+\$(PLATFORM)/start+\$(ARCH)-libc.s
 	@printf 'AS \t\$@\n'
@@ -146,9 +171,14 @@ ${stdlib}_asm = \$($cache)/rt/syscall.o \\
 	@printf 'AR\t\$@\n'
 	@\$(AR) -csr \$@ \$($cache)/rt/rt-freebsd.o \$(${stdlib}_asm)
 
+\$($cache)/rt/rt-openbsd.a: \$($cache)/rt/rt-openbsd.o \$(${stdlib}_asm)
+	@printf 'AR\t\$@\n'
+	@\$(AR) -csr \$@ \$($cache)/rt/rt-openbsd.o \$(${stdlib}_asm)
+
 ${stdlib}_rt = \$($cache)/rt/rt-\$(PLATFORM).a
 ${stdlib}_deps_linux += \$(${stdlib}_rt)
 ${stdlib}_deps_freebsd += \$(${stdlib}_rt)
+${stdlib}_deps_openbsd += \$(${stdlib}_rt)
 ${stdlib}_deps_any += \$(${stdlib}_rt)
 
 EOF
@@ -204,6 +234,16 @@ datetime() {
 		time.ha \
 		timezone.ha
 	gen_ssa -pfreebsd datetime errors fmt strings strio time time::chrono
+	gen_srcs -popenbsd datetime \
+		arithmetic.ha \
+		chronology.ha \
+		date.ha \
+		datetime.ha \
+		format.ha \
+		parse.ha \
+		time.ha \
+		timezone.ha
+	gen_ssa -popenbsd datetime errors fmt strings strio time time::chrono
 }
 
 crypto() {
@@ -391,6 +431,11 @@ crypto_random() {
 		+freebsd.ha \
 		random.ha
 	gen_ssa -pfreebsd crypto::random rt io errors
+
+	gen_srcs -popenbsd crypto::random \
+		+openbsd.ha \
+		random.ha
+	gen_ssa -popenbsd crypto::random rt io errors
 }
 
 crypto_salsa() {
@@ -784,6 +829,21 @@ gensrcs_io() {
 		types.ha \
 		util.ha \
 		$*
+	gen_srcs -popenbsd io \
+		'arch+$(ARCH).ha' \
+		+openbsd/file.ha \
+		+openbsd/mmap.ha \
+		+openbsd/vector.ha \
+		copy.ha \
+		drain.ha \
+		empty.ha \
+		handle.ha \
+		limit.ha \
+		stream.ha \
+		tee.ha \
+		types.ha \
+		util.ha \
+		$*
 }
 
 io() {
@@ -797,6 +857,7 @@ io() {
 	fi
 	gen_ssa -plinux io strings errors
 	gen_ssa -pfreebsd io strings errors
+	gen_ssa -popenbsd io strings errors
 }
 
 linux() {
@@ -830,6 +891,8 @@ log() {
 	gen_ssa -plinux log datetime fmt io os
 	gen_srcs -pfreebsd log logger.ha global.ha funcs.ha
 	gen_ssa -pfreebsd log datetime fmt io os
+	gen_srcs -popenbsd log logger.ha global.ha funcs.ha
+	gen_ssa -popenbsd log datetime fmt io os
 }
 
 gensrcs_math() {
@@ -877,6 +940,12 @@ net() {
 		errors.ha \
 		msg.ha
 	gen_ssa -pfreebsd net io os strings net::ip errors rt fmt
+
+	gen_srcs -popenbsd net \
+		+openbsd.ha \
+		errors.ha \
+		msg.ha
+	gen_ssa -popenbsd net io os strings net::ip errors rt fmt
 }
 
 net_dial() {
@@ -909,6 +978,10 @@ gensrcs_net_ip() {
 		+freebsd.ha \
 		ip.ha \
 		$*
+	gen_srcs -popenbsd net::ip \
+		+openbsd.ha \
+		ip.ha \
+		$*
 }
 
 net_ip() {
@@ -921,6 +994,7 @@ net_ip() {
 	fi
 	gen_ssa -plinux net::ip bytes io strconv strings strio fmt
 	gen_ssa -pfreebsd net::ip bytes io strconv strings strio fmt
+	gen_ssa -popenbsd net::ip bytes io strconv strings strio fmt
 }
 
 net_tcp() {
@@ -935,6 +1009,12 @@ net_tcp() {
 		listener.ha \
 		options.ha
 	gen_ssa -pfreebsd net::tcp io net net::ip os rt
+
+	gen_srcs -popenbsd net::tcp \
+		+openbsd.ha \
+		listener.ha \
+		options.ha
+	gen_ssa -popenbsd net::tcp io net net::ip os rt
 }
 
 net_udp() {
@@ -947,6 +1027,11 @@ net_udp() {
 		+freebsd.ha \
 		options.ha
 	gen_ssa -pfreebsd net::udp net net::ip errors rt os io
+
+	gen_srcs -popenbsd net::udp \
+		+openbsd.ha \
+		options.ha
+	gen_ssa -popenbsd net::udp net net::ip errors rt os io
 }
 
 net_unix() {
@@ -969,6 +1054,16 @@ net_unix() {
 		options.ha \
 		socketpair.ha
 	gen_ssa -pfreebsd net::unix net errors os io strings types fmt net::dial
+
+	gen_srcs -popenbsd net::unix \
+		+openbsd.ha \
+		addr.ha \
+		cmsg.ha \
+		dial.ha \
+		listener.ha \
+		options.ha \
+		socketpair.ha
+	gen_ssa -popenbsd net::unix net errors os io strings types fmt net::dial
 }
 
 gensrcs_net_uri() {
@@ -1018,6 +1113,15 @@ os() {
 		+freebsd/fs.ha \
 		fs.ha
 	gen_ssa -pfreebsd os io strings types fs encoding::utf8 bytes bufio errors
+
+	gen_srcs -popenbsd os \
+		+openbsd/environ.ha \
+		+openbsd/exit.ha \
+		+openbsd/dirfdfs.ha \
+		+openbsd/stdfd.ha \
+		+openbsd/fs.ha \
+		fs.ha
+	gen_ssa -popenbsd os io strings types fs encoding::utf8 bytes bufio errors
 }
 
 os_exec() {
@@ -1034,6 +1138,13 @@ os_exec() {
 		types.ha \
 		cmd.ha
 	gen_ssa -pfreebsd os::exec os strings fmt bytes path errors unix
+
+	gen_srcs -popenbsd os::exec \
+		exec+openbsd.ha \
+		process+openbsd.ha \
+		types.ha \
+		cmd.ha
+	gen_ssa -popenbsd os::exec os strings fmt bytes path errors unix
 }
 
 path() {
@@ -1165,6 +1276,10 @@ temp() {
 	gen_srcs -pfreebsd temp +freebsd.ha
 	gen_ssa -pfreebsd temp \
 		crypto::random encoding::hex fs io os path strio fmt strings
+
+	gen_srcs -popenbsd temp +openbsd.ha
+	gen_ssa -popenbsd temp \
+		crypto::random encoding::hex fs io os path strio fmt strings
 }
 
 time() {
@@ -1181,6 +1296,12 @@ time() {
 		conv.ha \
 		types.ha
 	gen_ssa -pfreebsd time
+	gen_srcs -popenbsd time \
+		+openbsd/functions.ha \
+		arithm.ha \
+		conv.ha \
+		types.ha
+	gen_ssa -popenbsd time
 }
 
 time_chrono() {
@@ -1201,6 +1322,15 @@ time_chrono() {
 		timezone.ha \
 		tzdb.ha
 	gen_ssa -pfreebsd time::chrono bufio endian errors fs fmt io os strconv \
+		strings time path
+	gen_srcs -popenbsd time::chrono \
+		+openbsd.ha \
+		chronology.ha \
+		leapsec.ha \
+		timescale.ha \
+		timezone.ha \
+		tzdb.ha
+	gen_ssa -popenbsd time::chrono bufio endian errors fs fmt io os strconv \
 		strings time path
 }
 
@@ -1229,6 +1359,14 @@ unix() {
 		getuid.ha \
 		setuid.ha
 	gen_ssa -pfreebsd unix errors fs io
+
+	gen_srcs -popenbsd unix \
+		+openbsd/nice.ha \
+		+openbsd/pipe.ha \
+		+openbsd/umask.ha \
+		getuid.ha \
+		setuid.ha
+	gen_ssa -popenbsd unix errors fs io
 }
 
 unix_hosts() {
@@ -1241,6 +1379,11 @@ unix_hosts() {
 		+freebsd.ha \
 		lookup.ha
 	gen_ssa -pfreebsd unix::hosts os io bufio net::ip strings
+
+	gen_srcs -popenbsd unix::hosts \
+		+openbsd.ha \
+		lookup.ha
+	gen_ssa -popenbsd unix::hosts os io bufio net::ip strings
 }
 
 unix_passwd() {
@@ -1257,6 +1400,9 @@ unix_poll() {
 
 	gen_srcs -pfreebsd unix::poll +freebsd.ha
 	gen_ssa -pfreebsd unix::poll rt errors time io
+
+	gen_srcs -popenbsd unix::poll +openbsd.ha
+	gen_ssa -popenbsd unix::poll rt errors time io
 }
 
 unix_resolvconf() {
@@ -1269,6 +1415,11 @@ unix_resolvconf() {
 		+freebsd.ha \
 		load.ha
 	gen_ssa -pfreebsd unix::resolvconf os io bufio net::ip strings
+
+	gen_srcs -popenbsd unix::resolvconf \
+		+openbsd.ha \
+		load.ha
+	gen_ssa -popenbsd unix::resolvconf os io bufio net::ip strings
 }
 
 unix_signal() {
@@ -1293,6 +1444,13 @@ unix_tty() {
 		+freebsd/open.ha \
 		+freebsd/winsize.ha
 	gen_ssa -pfreebsd unix::tty rt fs io os
+
+	gen_srcs -popenbsd unix::tty \
+		types.ha \
+		+openbsd/isatty.ha \
+		+openbsd/open.ha \
+		+openbsd/winsize.ha
+	gen_ssa -popenbsd unix::tty rt fs io os
 }
 
 uuid() {
@@ -1319,7 +1477,7 @@ crypto::cipher
 crypto::hmac
 crypto::mac
 crypto::math
-crypto::random	linux freebsd
+crypto::random	linux freebsd openbsd
 crypto::poly1305
 crypto::salsa
 crypto::sha1
@@ -1327,7 +1485,7 @@ crypto::sha256
 crypto::sha512
 crypto::curve25519
 crypto::ed25519
-datetime	linux freebsd
+datetime	linux freebsd openbsd
 dirs
 encoding::base64
 encoding::base32
@@ -1355,24 +1513,24 @@ hash::crc16
 hash::crc32
 hash::crc64
 hash::fnv
-io			linux freebsd
+io			linux freebsd openbsd
 linux			linux
 linux::keyctl		linux
 linux::timerfd	linux
 linux::vdso		linux
-log	linux freebsd
+log	linux freebsd openbsd
 math
 math::random
-net			linux freebsd
+net			linux freebsd openbsd
 net::dial
 net::dns
-net::ip			linux freebsd
-net::tcp		linux freebsd
-net::udp		linux freebsd
-net::unix		linux freebsd
+net::ip			linux freebsd openbsd
+net::tcp		linux freebsd openbsd
+net::udp		linux freebsd openbsd
+net::unix		linux freebsd openbsd
 net::uri
-os			linux freebsd
-os::exec		linux freebsd
+os			linux freebsd openbsd
+os::exec		linux freebsd openbsd
 path
 regex
 shlex
@@ -1381,17 +1539,17 @@ sort
 strconv
 strings
 strio
-temp			linux freebsd
-time			linux freebsd
-time::chrono	linux freebsd
+temp			linux freebsd openbsd
+time			linux freebsd openbsd
+time::chrono	linux freebsd openbsd
 types
-unix			linux freebsd
-unix::hosts	linux freebsd
+unix			linux freebsd openbsd
+unix::hosts	linux freebsd openbsd
 unix::passwd
-unix::poll		linux freebsd
-unix::resolvconf	linux freebsd
+unix::poll		linux freebsd openbsd
+unix::resolvconf	linux freebsd openbsd
 unix::signal		linux
-unix::tty		linux freebsd
+unix::tty		linux freebsd openbsd
 uuid"
 stdlib() {
 	rt
