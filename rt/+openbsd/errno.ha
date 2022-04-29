@@ -1,13 +1,14 @@
 // License: MPL-2.0
 // (c) 2021 Drew DeVault <sir@cmpwn.com>
+// (c) 2022 Brian Callahan <bcallah@openbsd.org>
 
-// Represents an error returned from the FreeBSD kernel.
+// Represents an error returned from the OpenBSD kernel.
 export type errno = !int;
 
 // Given an integer error number, wraps it in an error type.
 export fn wrap_errno(err: int) errno = err: errno;
 
-// Checks the return value from a FreeBSD syscall and, if found to be in error,
+// Checks the return value from a OpenBSD syscall and, if found to be in error,
 // returns the appropriate error. Otherwise, returns the original value.
 fn wrap_return(r: u64) (errno | u64) = {
 	if (r > -4096: u64) {
@@ -471,7 +472,6 @@ export def ENOPROTOOPT: int = 42;
 export def EPROTONOSUPPORT: int = 43;
 export def ESOCKTNOSUPPORT: int = 44;
 export def EOPNOTSUPP: int = 45;
-export def ENOTSUP: int = EOPNOTSUPP;
 export def EPFNOSUPPORT: int = 46;
 export def EAFNOSUPPORT: int = 47;
 export def EADDRINUSE: int = 48;
@@ -487,7 +487,6 @@ export def ENOTCONN: int = 57;
 export def ESHUTDOWN: int = 58;
 export def ETOOMANYREFS: int = 59;
 export def ETIMEDOUT: int = 60;
-export def ETIME: int = ETIMEDOUT;
 export def ECONNREFUSED: int = 61;
 export def ELOOP: int = 62;
 export def ENAMETOOLONG: int = 63;
@@ -509,19 +508,18 @@ export def ENOSYS: int = 78;
 export def EFTYPE: int = 79;
 export def EAUTH: int = 80;
 export def ENEEDAUTH: int = 81;
-export def EIDRM: int = 82;
-export def ENOMSG: int = 83;
-export def EOVERFLOW: int = 84;
-export def ECANCELED: int = 85;
-export def EILSEQ: int = 86;
-export def ENOATTR: int = 87;
-export def EDOOFUS: int = 88;
-export def EBADMSG: int = 89;
-export def EMULTIHOP: int = 90;
-export def ENOLINK: int = 91;
-export def EPROTO: int = 92;
-export def ENOTCAPABLE: int = 93;
-export def ECAPMODE: int = 94;
-export def ENOTRECOVERABLE: int = 95;
-export def EOWNERDEAD: int = 96;
-export def EINTEGRITY: int = 97;
+export def EIPSEC: int = 82;
+export def ENOATTR: int = 83;
+export def EILSEQ: int = 84;
+export def ENOMEDIUM: int = 85;
+export def EMEDIUMTYPE: int = 86;
+export def EOVERFLOW: int = 87;
+export def ECANCELED: int = 88;
+export def EIDRM: int = 89;
+export def ENOMSG: int = 90;
+export def ENOTSUP: int = 91;
+export def EBADMSG: int = 92;
+export def ENOTRECOVERABLE: int = 93;
+export def EOWNERDEAD: int = 94;
+export def EPROTO: int = 95;
+export def ELAST: int = 95;
