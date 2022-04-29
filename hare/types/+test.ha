@@ -1,0 +1,338 @@
+// License: MPL-2.0
+// (c) 2022 Alexey Yerin <yyp@disroot.org>
+// (c) 2021 Bor Grošelj Simić <bor.groseljsimic@telemach.net>
+// (c) 2021 Drew DeVault <sir@cmpwn.com>
+// (c) 2021 Eyal Sawady <ecs@d2evs.net>
+// (c) 2022 Sebastian <sebastian@sebsite.pw>
+use bufio;
+use errors;
+use hare::ast;
+use hare::lex;
+use hare::parse;
+use io;
+use strings;
+use fmt;
+
+fn parse_type(in: str) ast::_type = {
+	let buf = bufio::fixed(strings::toutf8(in), io::mode::READ);
+	let lex = lex::init(&buf, "<test>");
+	return parse::_type(&lex)!;
+};
+
+@test fn store() void = {
+	let st = store(x86_64, null, null);
+	defer store_free(st);
+
+	let atype = parse_type("int");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.repr as builtin == builtin::INT);
+	assert(htype.sz == x86_64._int && htype.align == x86_64._int);
+
+	let type2 = lookup(st, &atype)!;
+	assert(htype == type2, "types should be singletons");
+
+	let atype = parse_type("*int");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == x86_64._pointer && htype.align == x86_64._pointer);
+	let htype = htype.repr as pointer;
+	assert(htype.referent.repr as builtin == builtin::INT);
+};
+
+fn resolve(
+	rstate: nullable *void,
+	store: *typestore,
+	expr: const *ast::expr,
+) (size | deferred | error) = {
+	let expr = expr.expr as ast::constant_expr;
+	let n = expr as ast::number_constant;
+	let ival = n.value as i64;
+	assert(ival >= 0);
+	return ival: size;
+};
+
+@test fn structs() void = {
+	let st = store(x86_64, &resolve, null);
+	defer store_free(st);
+
+	// Basic struct
+	let atype = parse_type("struct { x: int, y: int }");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 8);
+	assert(htype.align == 4);
+	let stype = htype.repr as _struct;
+	assert(stype.kind == struct_union::STRUCT);
+	assert(len(stype.fields) == 2);
+
+	let x = stype.fields[0];
+	assert(x.name == "x");
+	assert(x.offs == 0);
+	assert(x._type.repr as builtin == builtin::INT);
+
+	let y = stype.fields[1];
+	assert(y.name == "y");
+	assert(y.offs == 4);
+	assert(y._type.repr as builtin == builtin::INT);
+
+	// Basic union
+	let atype = parse_type("union { x: int, y: int }");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 4);
+	assert(htype.align == 4);
+	let stype = htype.repr as _struct;
+	assert(stype.kind == struct_union::UNION);
+	assert(len(stype.fields) == 2);
+
+	let x = stype.fields[0];
+	assert(x.name == "x");
+	assert(x.offs == 0);
+	assert(x._type.repr as builtin == builtin::INT);
+
+	let y = stype.fields[1];
+	assert(y.name == "y");
+	assert(y.offs == 0);
+	assert(y._type.repr as builtin == builtin::INT);
+
+	// Padding
+	let atype = parse_type("struct { w: u8, x: u32, y: u8, z: u64 }");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 24);
+	assert(htype.align == 8);
+	let stype = htype.repr as _struct;
+	assert(stype.kind == struct_union::STRUCT);
+
+	let w = stype.fields[0];
+	assert(w.offs == 0);
+	let x = stype.fields[1];
+	assert(x.offs == 4);
+	let y = stype.fields[2];
+	assert(y.offs == 8);
+	let z = stype.fields[3];
+	assert(z.offs == 16);
+
+	let atype = parse_type("struct { x: u8, y: size, z: u8 }");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 24);
+
+	// Sort order
+	let atype = parse_type("struct { z: u8, y: u8, x: u8, q: u8 }");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	let stype = htype.repr as _struct;
+	assert(stype.fields[0].name == "q");
+	assert(stype.fields[1].name == "x");
+	assert(stype.fields[2].name == "y");
+	assert(stype.fields[3].name == "z");
+
+	// Embedded struct
+	let atype = parse_type("struct {
+		x: int,
+		y: int,
+		struct {
+			z: int,
+			q: int,
+		},
+		p: int,
+	}");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 20);
+	assert(htype.align == 4);
+	let stype = htype.repr as _struct;
+	assert(stype.fields[0].name == "p");
+	assert(stype.fields[0].offs == 16);
+	assert(stype.fields[1].name == "q");
+	assert(stype.fields[1].offs == 12);
+	assert(stype.fields[2].name == "x");
+	assert(stype.fields[2].offs == 0);
+	assert(stype.fields[3].name == "y");
+	assert(stype.fields[3].offs == 4);
+	assert(stype.fields[4].name == "z");
+	assert(stype.fields[4].offs == 8);
+
+	// Embedded union
+	let atype = parse_type("struct {
+		x: int,
+		y: int,
+		union {
+			z: int,
+			q: int,
+		},
+		p: int,
+	}");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 16);
+	assert(htype.align == 4);
+	let stype = htype.repr as _struct;
+	assert(stype.fields[0].name == "p");
+	assert(stype.fields[0].offs == 12);
+	assert(stype.fields[1].name == "q");
+	assert(stype.fields[1].offs == 8);
+	assert(stype.fields[2].name == "x");
+	assert(stype.fields[2].offs == 0);
+	assert(stype.fields[3].name == "y");
+	assert(stype.fields[3].offs == 4);
+	assert(stype.fields[4].name == "z");
+	assert(stype.fields[4].offs == 8);
+
+	// Embedded (struct) alias
+	// TODO
+
+	// Embedded (union) alias
+	// TODO
+
+	// Explicit offsets
+	let atype = parse_type("struct {
+		@offset(8)  x: int,
+		@offset(16) y: int,
+		@offset(32) z: int,
+	}");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 36);
+	assert(htype.align == 4);
+	let stype = htype.repr as _struct;
+	assert(stype.fields[0].name == "x");
+	assert(stype.fields[0].offs == 8);
+	assert(stype.fields[1].name == "y");
+	assert(stype.fields[1].offs == 16);
+	assert(stype.fields[2].name == "z");
+	assert(stype.fields[2].offs == 32);
+};
+
+@test fn tuples() void = {
+	let st = store(x86_64, &resolve, null);
+	defer store_free(st);
+
+	// Basic case
+	let atype = parse_type("(int, int)");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 8);
+	assert(htype.align == 4);
+	let tup = htype.repr as tuple;
+	assert(len(tup) == 2);
+
+	assert(tup[0].offs == 0);
+	assert(tup[0]._type.repr as builtin == builtin::INT);
+	assert(tup[1].offs == 4);
+	assert(tup[1]._type.repr as builtin == builtin::INT);
+
+	// Padding
+	let atype = parse_type("(i8, i32, i8, i64)");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 24);
+	assert(htype.align == 8);
+
+	let tup = htype.repr as tuple;
+	assert(tup[0].offs == 0);
+	assert(tup[1].offs == 4);
+	assert(tup[2].offs == 8);
+	assert(tup[3].offs == 16);
+};
+
+@test fn lists() void = {
+	let st = store(x86_64, &resolve, null);
+	defer store_free(st);
+
+	// Slice
+	let atype = parse_type("[]int");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 24);
+	assert(htype.align == 8);
+	let slice = htype.repr as slice;
+	assert(slice.repr as builtin == builtin::INT);
+
+	// Normal array
+	let atype = parse_type("[5]i32");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 4 * 5);
+	assert(htype.align == 4);
+	let arr = htype.repr as array;
+	assert(arr.member.repr as builtin == builtin::I32);
+	assert(arr.length == 5);
+
+	// Unbounded array
+	let atype = parse_type("[*]i32");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == SIZE_UNDEFINED);
+	assert(htype.align == 4);
+	let arr = htype.repr as array;
+	assert(arr.member.repr as builtin == builtin::I32);
+	assert(arr.length == SIZE_UNDEFINED);
+
+	// Contextual array (equivalent to unbounded at this compilation stage)
+	let atype = parse_type("[_]i32");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == SIZE_UNDEFINED);
+	assert(htype.align == 4);
+	let arr = htype.repr as array;
+	assert(arr.member.repr as builtin == builtin::I32);
+	assert(arr.length == SIZE_UNDEFINED);
+};
+
+@test fn funcs() void = {
+	let st = store(x86_64, &resolve, null);
+	defer store_free(st);
+
+	let atype = parse_type("@noreturn fn() void");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == SIZE_UNDEFINED);
+	assert(htype.align == SIZE_UNDEFINED);
+	let f = htype.repr as func;
+	assert(f.result.repr as builtin == builtin::VOID);
+	assert(f.variadism  == variadism::NONE);
+	assert(f.flags == func_flags::NORETURN);
+	assert(len(f.params) == 0);
+
+	let atype = parse_type("fn(foo: int, bar: str...) int");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == SIZE_UNDEFINED);
+	assert(htype.align == SIZE_UNDEFINED);
+	let f = htype.repr as func;
+	assert(f.result.repr as builtin == builtin::INT);
+	assert(f.variadism  == variadism::HARE);
+	assert(f.flags == 0);
+	assert(len(f.params) == 2);
+	assert(f.params[0].repr as builtin == builtin::INT);
+	assert(f.params[1].repr as builtin == builtin::STR);
+};
+
+@test fn tagged() void = {
+	let st = store(x86_64, &resolve, null);
+	defer store_free(st);
+
+	let atype = parse_type("(int | int | void)");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == st.arch._int * 2);
+	assert(htype.align == st.arch._int);
+	let t = htype.repr as tagged;
+	assert(len(t) == 2);
+	assert(t[0].repr as builtin == builtin::INT);
+	assert(t[1].repr as builtin == builtin::VOID);
+
+	let atype = parse_type("(int | (int | str | void))");
+	defer ast::type_finish(atype);
+	let htype = lookup(st, &atype)!;
+	assert(htype.sz == 32);
+	assert(htype.align == 8);
+	let t = htype.repr as tagged;
+	assert(len(t) == 3);
+	assert(t[0].repr as builtin == builtin::INT);
+	assert(t[1].repr as builtin == builtin::VOID);
+	assert(t[2].repr as builtin == builtin::STR);
+};

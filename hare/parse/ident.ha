@@ -1,0 +1,51 @@
+// License: MPL-2.0
+// (c) 2022 Alexey Yerin <yyp@disroot.org>
+// (c) 2021 Drew DeVault <sir@cmpwn.com>
+// (c) 2021 Eyal Sawady <ecs@d2evs.net>
+use bufio;
+use hare::ast;
+use hare::lex::{ltok};
+use hare::lex;
+use io;
+use strings;
+
+fn ident_trailing(lexer: *lex::lexer) ((ast::ident, bool) | error) = {
+	let ident: []str = [];
+	let z = 0z;
+	for (true) {
+		let name = match (try(lexer, ltok::NAME)?) {
+		case let t: lex::token =>
+			yield t.1 as str;
+		case void =>
+			return (ident: ast::ident, true);
+		};
+		append(ident, name);
+		z += len(name);
+		match (try(lexer, ltok::DOUBLE_COLON)?) {
+		case void => break;
+		case => void; // Grab the next ident
+		};
+		z += 1;
+	};
+	if (z > ast::IDENT_MAX) {
+		ast::ident_free(ident: ast::ident);
+		return syntaxerr(lex::mkloc(lexer),
+			"Identifier exceeds maximum length");
+	};
+	return (ident: ast::ident, false);
+};
+
+// Parses a single identifier, i.e. 'foo::bar::baz'.
+export fn ident(lexer: *lex::lexer) (ast::ident | error) = {
+	let ident = ident_trailing(lexer)?;
+	synassert(lex::mkloc(lexer), !ident.1, "Unexpected trailing :: in ident")?;
+	return ident.0;
+};
+
+// A convenience function which parses an identifier from a string, so the
+// caller needn't provide a lexer instance.
+export fn identstr(in: str) (ast::ident | error) = {
+	const buf = bufio::fixed(strings::toutf8(in), io::mode::READ);
+	const lexer = lex::init(&buf, "<string>");
+	return ident(&lexer);
+};

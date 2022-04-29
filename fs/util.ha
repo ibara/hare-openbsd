@@ -1,0 +1,165 @@
+// License: MPL-2.0
+// (c) 2022 Bor Grošelj Simić <bor.groseljsimic@telemach.net>
+// (c) 2021-2022 Drew DeVault <sir@cmpwn.com>
+// (c) 2021 Eyal Sawady <ecs@d2evs.net>
+// (c) 2021 Thomas Bracht Laumann Jespersen <t@laumann.xyz>
+use errors;
+use io;
+use path;
+use strings;
+
+// Converts a mode into a Unix-like mode string (e.g. "-rw-r--r--"). The string
+// is statically allocated, use [[strings::dup]] to duplicate it or it will be
+// overwritten on subsequent calls.
+export fn mode_str(m: mode) const str = {
+	static let buf: [10]u8 = [0...];
+	buf = [
+		(if (m & mode::DIR == mode::DIR) 'd'
+			else if (m & mode::FIFO == mode::FIFO) 'p'
+			else if (m & mode::SOCK == mode::SOCK) 's'
+			else if (m & mode::BLK == mode::BLK) 'b'
+			else if (m & mode::LINK == mode::LINK) 'l'
+			else if (m & mode::CHR == mode::CHR) 'c'
+			else '-'): u32: u8,
+		(if (m & mode::USER_R == mode::USER_R) 'r' else '-'): u32: u8,
+		(if (m & mode::USER_W == mode::USER_W) 'w' else '-'): u32: u8,
+		(if (m & mode::SETUID == mode::SETUID) 's'
+			else if (m & mode::USER_X == mode::USER_X) 'x'
+			else '-'): u32: u8,
+		(if (m & mode::GROUP_R == mode::GROUP_R) 'r' else '-'): u32: u8,
+		(if (m & mode::GROUP_W == mode::GROUP_W) 'w' else '-'): u32: u8,
+		(if (m & mode::SETGID == mode::SETGID) 's'
+			else if (m & mode::GROUP_X == mode::GROUP_X) 'x'
+			else '-'): u32: u8,
+		(if (m & mode::OTHER_R == mode::OTHER_R) 'r' else '-'): u32: u8,
+		(if (m & mode::OTHER_W == mode::OTHER_W) 'w' else '-'): u32: u8,
+		(if (m & mode::STICKY == mode::STICKY) 't'
+			else if (m & mode::OTHER_X == mode::OTHER_X) 'x'
+			else '-'): u32: u8,
+	];
+	return strings::fromutf8(buf);
+};
+
+@test fn mode_str() void = {
+	assert(mode_str(0o777: mode) == "-rwxrwxrwx");
+	assert(mode_str(mode::DIR | 0o755: mode) == "drwxr-xr-x");
+	assert(mode_str(0o755: mode | mode::SETUID) == "-rwsr-xr-x");
+	assert(mode_str(0o644: mode) == "-rw-r--r--");
+	assert(mode_str(0: mode) == "----------");
+};
+
+// Returns the permission bits of a file mode.
+export fn mode_perm(m: mode) mode = (m: uint & 0o777u): mode;
+
+// Returns the type bits of a file mode.
+export fn mode_type(m: mode) mode = (m: uint & ~0o777u): mode;
+
+// Returns true if this item is a regular file.
+export fn isfile(mode: mode) bool = mode & mode::REG == mode::REG;
+
+// Returns true if this item is a FIFO (named pipe).
+export fn isfifo(mode: mode) bool = mode & mode::FIFO == mode::FIFO;
+
+// Returns true if this item is a directory.
+export fn isdir(mode: mode) bool = mode & mode::DIR == mode::DIR;
+
+// Returns true if this item is a character device.
+export fn ischdev(mode: mode) bool = mode & mode::CHR == mode::CHR;
+
+// Returns true if this item is a block device.
+export fn isblockdev(mode: mode) bool = mode & mode::BLK == mode::BLK;
+
+// Returns true if this item is a symbolic link.
+export fn islink(mode: mode) bool = mode & mode::LINK == mode::LINK;
+
+// Returns true if this item is a Unix socket.
+export fn issocket(mode: mode) bool = mode & mode::SOCK == mode::SOCK;
+
+// Reads all entries from a directory. The caller must free the return value
+// with [[dirents_free]].
+export fn readdir(fs: *fs, path: str) ([]dirent | error) = {
+	let i = iter(fs, path)?;
+	let ents: []dirent = [];
+	for (true) {
+		match (next(i)) {
+		case let d: dirent =>
+			append(ents, dirent_dup(&d));
+		case void =>
+			break;
+		};
+	};
+	return ents;
+};
+
+// Frees a slice of [[dirent]]s.
+export fn dirents_free(d: []dirent) void = {
+	for (let i = 0z; i < len(d); i += 1) {
+		dirent_free(&d[i]);
+	};
+};
+
+// Removes a directory, and anything in it.
+export fn rmdirall(fs: *fs, path: str) (void | error) = {
+	let it = iter(fs, path)?;
+	for (true) {
+		match (next(it)) {
+		case let ent: dirent =>
+			if (ent.name == "." || ent.name == "..") {
+				continue;
+			};
+			// XXX: This could probably be more efficient if we
+			// re-used the buffer further down the call stack.
+			let buf = alloc(path::init());
+			defer free(buf);
+			const path = path::set(buf, path, ent.name)!;
+
+			switch (ent.ftype & mode::DIR) {
+			case mode::DIR =>
+				rmdirall(fs, path)?;
+			case =>
+				remove(fs, path)?;
+			};
+		case void =>
+			break;
+		};
+	};
+	if (path != "") {
+		return rmdir(fs, path);
+	};
+};
+
+// Canonicalizes a path in this filesystem by resolving all symlinks and
+// collapsing any "." or ".." path components. The return value is statically
+// allocated and will be overwritten on subsequent calls.
+export fn realpath(fs: *fs, path: str) (str | error) = {
+	static let buf = path::buffer { ... };
+	path::reset(&buf);
+
+	const iter = path::iter(path);
+	for (true) {
+		const item = match (path::next(&iter)) {
+		case let item: str =>
+			yield item;
+		case void =>
+			break;
+		};
+
+		const item = path::add(&buf, item)!;
+		const link = match (readlink(fs, item)) {
+		case let link: str =>
+			yield link;
+		case wrongtype =>
+			continue;
+		case let err: error =>
+			return err;
+		};
+
+		if (!path::abs(link)) {
+			path::add(&buf, "..", link)!;
+		} else {
+			path::set(&buf, link)!;
+		};
+	};
+
+	return path::string(&buf);
+};

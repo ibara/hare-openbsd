@@ -1,0 +1,618 @@
+// License: MPL-2.0
+// (c) 2021 Drew DeVault <sir@cmpwn.com>
+// (c) 2021 Eyal Sawady <ecs@d2evs.net>
+// (c) 2022 Sebastian <sebastian@sebsite.pw>
+use hare::lex;
+
+// An identifier access expression.
+//
+// 	foo
+export type access_identifier = ident;
+
+// An index access expression.
+//
+// 	foo[0]
+export type access_index = struct {
+	object: *expr,
+	index: *expr,
+};
+
+// A struct field access expression.
+//
+// 	foo.bar
+export type access_field = struct {
+	object: *expr,
+	field: str,
+};
+
+// A tuple field access expression.
+//
+// 	foo.1
+export type access_tuple = struct {
+	object: *expr,
+	value: *expr,
+};
+
+// An access expression.
+export type access_expr = (access_identifier | access_index | access_field
+	| access_tuple);
+
+// The form of an allocation expression.
+//
+// 	alloc(foo)    // OBJECT
+// 	alloc(foo...) // COPY
+export type alloc_form = enum {
+	OBJECT,
+	COPY,
+};
+
+// An allocation expression.
+//
+// 	alloc(foo)
+// 	alloc(foo...)
+// 	alloc(foo, bar)
+export type alloc_expr = struct {
+	init: *expr,
+	form: alloc_form,
+	capacity: nullable *expr,
+};
+
+// An append expression.
+//
+// 	append(foo, bar, (more), baz...)
+export type append_expr = struct {
+	object: *expr,
+	variadic: nullable *expr,
+	values: []*expr,
+	is_static: bool,
+};
+
+// An assertion expression.
+//
+// 	assert(foo)
+// 	assert(foo, "error")
+// 	abort()
+// 	abort("error")
+export type assert_expr = struct {
+	cond: nullable *expr,
+	message: nullable *expr,
+	is_static: bool,
+};
+
+// An assignment expression.
+//
+// 	foo = bar
+export type assign_expr = struct {
+	op: (binarithm_op | void),
+	object: *expr,
+	value: *expr,
+	indirect: bool,
+};
+
+// A binary arithmetic operator
+export type binarithm_op = enum {
+	// TODO: Rehome this with the checked AST?
+
+	BAND,	// &
+	BOR,	// |
+	DIV,	// /
+	GT,	// >
+	GTEQ,	// >=
+	LAND,	// &&
+	LEQUAL,	// ==
+	LESS,	// <
+	LESSEQ,	// <=
+	LOR,	// ||
+	LSHIFT,	// <<
+	LXOR,	// ^^
+	MINUS,	// -
+	MODULO,	// %
+	NEQUAL,	// !=
+	PLUS,	// +
+	RSHIFT,	// >>
+	TIMES,	// *
+	BXOR,	// ^
+};
+
+// A binary arithmetic expression.
+//
+// 	foo * bar
+export type binarithm_expr = struct {
+	op: binarithm_op,
+	lvalue: *expr,
+	rvalue: *expr,
+};
+
+// A single variable biding.
+//
+// 	foo: int = bar
+export type binding = struct {
+	name: str,
+	_type: nullable *_type,
+	init: *expr,
+};
+
+// A variable binding expression.
+//
+// 	let foo: int = bar, ...
+export type binding_expr = struct {
+	is_static: bool,
+	is_const: bool,
+	bindings: []binding,
+};
+
+// A break expression. The label is set to empty string if absent.
+//
+// 	break :label
+export type break_expr = label;
+
+// A function call expression.
+//
+// 	foo(bar)
+export type call_expr = struct {
+	lvalue: *expr,
+	variadic: bool,
+	args: []*expr,
+};
+
+// The kind of cast expression being used.
+export type cast_kind = enum {
+	// TODO: Should this be rehomed with the checked AST?
+
+	CAST,
+	ASSERTION,
+	TEST,
+};
+
+// A cast expression.
+//
+// 	foo: int
+// 	foo as int
+// 	foo is int
+export type cast_expr = struct {
+	kind: cast_kind,
+	value: *expr,
+	_type: *_type,
+};
+
+// A compound expression.
+//
+// 	{
+// 		foo;
+// 		bar;
+// 		// ...
+// 	}
+export type compound_expr = struct {
+	exprs: []*expr,
+	label: label,
+};
+
+// An array constant.
+//
+// 	[foo, bar, ...]
+export type array_constant = struct {
+	expand: bool,
+	values: []*expr,
+};
+
+// A single struct field and value.
+//
+// 	foo: int = 10
+export type struct_value = struct {
+	name: str,
+	_type: nullable *_type,
+	init: *expr,
+};
+
+// A struct constant.
+//
+// 	struct { foo: int = bar, struct { baz = quux }, ... }
+export type struct_constant = struct {
+	autofill: bool,
+	alias: ident, // [] for anonymous
+	fields: [](struct_value | *struct_constant),
+};
+
+// A tuple constant.
+//
+// 	(foo, bar, ...)
+export type tuple_constant = []*expr;
+
+// The value "null".
+export type _null = void;
+
+// A scalar value.
+export type value = (void | bool | _null | ...lex::value);
+
+// An integer or float constant.
+export type number_constant = struct {
+	suff: lex::ltok,
+	value: (i64 | u64 | f64),
+};
+
+// A constant expression.
+export type constant_expr = (value | array_constant | number_constant |
+	struct_constant | tuple_constant);
+
+// A continue expression. The label is set to empty string if absent.
+//
+// 	continue :label
+export type continue_expr = label;
+
+// A deferred expression.
+//
+// 	defer foo
+export type defer_expr = *expr;
+
+// A delete expression.
+//
+// 	delete(foo[10])
+// 	delete(foo[4..42])
+export type delete_expr = struct {
+	object: *expr,
+	is_static: bool,
+};
+
+// A for loop. The label is set to empty string if absent.
+//
+// 	:label for (let foo = 0; foo < bar; baz) quux
+export type for_expr = struct {
+	bindings: nullable *expr,
+	cond: *expr,
+	afterthought: nullable *expr,
+	body: *expr,
+};
+
+// A free expression.
+//
+// 	free(foo)
+export type free_expr = *expr;
+
+// An if or if..else expression.
+//
+// 	if (foo) bar else baz
+export type if_expr = struct {
+	cond: *expr,
+	tbranch: *expr,
+	fbranch: nullable *expr,
+};
+
+// An insert expression.
+//
+// 	insert(foo[0], bar, (more), baz...)
+export type insert_expr = struct {
+	object: *expr,
+	variadic: nullable *expr,
+	values: []*expr,
+	is_static: bool,
+};
+
+// :label. The ":" character is not included.
+export type label = str;
+
+// A length expression.
+//
+// 	len(foo)
+export type len_expr = *expr;
+
+// A match case.
+//
+//	case type => exprs
+//	case let name: type => exprs
+export type match_case = struct {
+	name: str,
+	_type: nullable *_type,
+	exprs: []*expr,
+};
+
+// A match expression.
+//
+// 	match (foo) { case int => bar; ... }
+export type match_expr = struct {
+	value: *expr,
+	cases: []match_case,
+	default: []*expr,
+};
+
+// An offset expression.
+//
+// 	offset(foo.bar)
+export type offset_expr = *expr;
+
+// An error propagation expression.
+//
+// 	foo?
+export type propagate_expr = struct {
+	is_abort: bool,
+	expr: *expr,
+};
+
+// A return statement.
+//
+// 	return foo
+export type return_expr = nullable *expr;
+
+// A size expression.
+//
+// 	size(int)
+export type size_expr = *_type;
+
+// A slicing expression.
+//
+// 	foo[bar..baz]
+export type slice_expr = struct {
+	object: *expr,
+	start: nullable *expr,
+	end: nullable *expr,
+};
+
+// A switch case.
+//
+// 	case value => exprs
+export type switch_case = struct {
+	options: []*expr, // [] for default case
+	exprs: []*expr,
+};
+
+// A switch expression.
+//
+// 	switch (foo) { case bar => baz; ... }
+export type switch_expr = struct {
+	value: *expr,
+	cases: []switch_case,
+};
+
+// A unary operator
+export type unarithm_op = enum {
+	// TODO: Should this be rehomed with the checked AST?
+
+	ADDR,	// &
+	BNOT,	// ~
+	DEREF,	// *
+	LNOT,	// !
+	MINUS,	// -
+	PLUS,	// +
+};
+
+// A unary arithmetic expression.
+//
+// 	!example
+export type unarithm_expr = struct {
+	op: unarithm_op,
+	operand: *expr,
+};
+
+// A vastart expression.
+//
+// 	vastart()
+export type vastart_expr = void;
+
+// A vaarg expression.
+//
+// 	vaarg(ap)
+export type vaarg_expr = *expr;
+
+// A vaend expression.
+//
+// 	vaend(ap)
+export type vaend_expr = *expr;
+
+// A C-style variadic expression.
+export type variadic_expr = (vastart_expr | vaarg_expr | vaend_expr);
+
+// A yield expression.
+//
+// 	yield foo
+export type yield_expr = struct {
+	label: str,
+	value: nullable *expr,
+};
+
+// A Hare expression.
+export type expr = struct {
+	start: lex::location,
+	end: lex::location,
+	expr: (access_expr | alloc_expr | append_expr | assert_expr |
+		assign_expr | binarithm_expr | binding_expr | break_expr |
+		call_expr | cast_expr | constant_expr | continue_expr |
+		defer_expr | delete_expr | for_expr | free_expr | if_expr |
+		insert_expr | compound_expr | match_expr | len_expr |
+		size_expr | offset_expr | propagate_expr | return_expr |
+		slice_expr | switch_expr | unarithm_expr | variadic_expr |
+		yield_expr),
+};
+
+// Frees resources associated with a Hare [[expr]]ession.
+export fn expr_finish(e: (expr | nullable *expr)) void = match (e) {
+case let e: nullable *expr =>
+	match (e) {
+	case null => void;
+	case let e: *expr =>
+		expr_finish(*e);
+		free(e);
+	};
+case let e: expr =>
+	match (e.expr) {
+	case let a: access_expr =>
+		match (a) {
+		case let i: access_identifier =>
+			ident_free(i);
+		case let i: access_index =>
+			expr_finish(i.object);
+			expr_finish(i.index);
+		case let f: access_field =>
+			expr_finish(f.object);
+			free(f.field);
+		case let t: access_tuple =>
+			expr_finish(t.object);
+			expr_finish(t.value);
+		};
+	case let a: alloc_expr =>
+		expr_finish(a.init);
+		expr_finish(a.capacity);
+	case let a: append_expr =>
+		expr_finish(a.object);
+		match (a.variadic) {
+		case null => void;
+		case let v: *expr =>
+			expr_finish(v);
+		};
+		for (let i = 0z; i < len(a.values); i += 1) {
+			expr_finish(a.values[i]);
+		};
+		free(a.values);
+	case let a: assert_expr =>
+		expr_finish(a.cond);
+		expr_finish(a.message);
+	case let a: assign_expr =>
+		expr_finish(a.object);
+		expr_finish(a.value);
+	case let b: binarithm_expr =>
+		expr_finish(b.lvalue);
+		expr_finish(b.rvalue);
+	case let b: binding_expr =>
+		for (let i = 0z; i < len(b.bindings); i += 1) {
+			free(b.bindings[i].name);
+			type_finish(b.bindings[i]._type);
+			expr_finish(b.bindings[i].init);
+		};
+		free(b.bindings);
+	case let b: break_expr =>
+		free(b);
+	case let c: call_expr =>
+		expr_finish(c.lvalue);
+		for (let i = 0z; i < len(c.args); i += 1) {
+			expr_finish(c.args[i]);
+		};
+		free(c.args);
+	case let c: cast_expr =>
+		expr_finish(c.value);
+		type_finish(c._type);
+	case let c: compound_expr =>
+		for (let i = 0z; i < len(c.exprs); i += 1) {
+			expr_finish(c.exprs[i]);
+		};
+		free(c.exprs);
+		free(c.label);
+	case let c: constant_expr =>
+		match (c) {
+		case (void | _null | ...lex::value) => void;
+		case let a: array_constant =>
+			for (let i = 0z; i < len(a.values); i += 1) {
+				expr_finish(a.values[i]);
+			};
+			free(a.values);
+		case let s: struct_constant =>
+			struct_constant_finish(s);
+		case let t: tuple_constant =>
+			for (let i = 0z; i < len(t); i += 1) {
+				expr_finish(t[i]);
+			};
+			free(t);
+		case number_constant => void;
+		};
+	case let c: continue_expr =>
+		free(c);
+	case let d: defer_expr =>
+		expr_finish(d: *expr);
+	case let d: delete_expr =>
+		expr_finish(d.object);
+	case let f: for_expr =>
+		expr_finish(f.bindings);
+		expr_finish(f.cond);
+		expr_finish(f.afterthought);
+		expr_finish(f.body);
+	case let f: free_expr =>
+		expr_finish(f: *expr);
+	case let i: if_expr =>
+		expr_finish(i.cond);
+		expr_finish(i.tbranch);
+		expr_finish(i.fbranch);
+	case let e: insert_expr =>
+		expr_finish(e.object);
+		match (e.variadic) {
+		case null => void;
+		case let v: *expr =>
+			expr_finish(v);
+		};
+		for (let i = 0z; i < len(e.values); i += 1) {
+			expr_finish(e.values[i]);
+		};
+		free(e.values);
+	case let l: len_expr =>
+		expr_finish(l: *expr);
+	case let m: match_expr =>
+		expr_finish(m.value);
+		for (let i = 0z; i < len(m.cases); i += 1) {
+			free(m.cases[i].name);
+			type_finish(m.cases[i]._type);
+			const exprs = m.cases[i].exprs;
+			for (let i = 0z; i < len(exprs); i += 1) {
+				expr_finish(exprs[i]);
+			};
+			free(exprs);
+		};
+		free(m.cases);
+		for (let i = 0z; i < len(m.default); i += 1) {
+			expr_finish(m.default[i]);
+		};
+		free(m.default);
+	case let o: offset_expr =>
+		expr_finish(o: *expr);
+	case let p: propagate_expr =>
+		expr_finish(p.expr);
+	case let r: return_expr =>
+		expr_finish(r: *expr);
+	case let s: size_expr =>
+		type_finish(s: *_type);
+	case let s: slice_expr =>
+		expr_finish(s.object);
+		expr_finish(s.start);
+		expr_finish(s.end);
+	case let s: switch_expr =>
+		expr_finish(s.value);
+		for (let i = 0z; i < len(s.cases); i += 1) {
+			let opts = s.cases[i].options;
+			for (let j = 0z; j < len(opts); j += 1) {
+				expr_finish(opts[j]);
+			};
+			free(opts);
+
+			let exprs = s.cases[i].exprs;
+			for (let j = 0z; j < len(exprs); j += 1) {
+				expr_finish(exprs[j]);
+			};
+			free(exprs);
+		};
+		free(s.cases);
+	case let u: unarithm_expr =>
+		expr_finish(u.operand);
+	case let v: variadic_expr =>
+		match (v) {
+		case vastart_expr => void;
+		case let v: vaarg_expr =>
+			expr_finish(v);
+		case let v: vaend_expr =>
+			expr_finish(v);
+		};
+	case let y: yield_expr =>
+		free(y.label);
+		expr_finish(y.value);
+	};
+};
+
+fn struct_constant_finish(s: struct_constant) void = {
+	ident_free(s.alias);
+	for (let i = 0z; i < len(s.fields); i += 1) {
+		match (s.fields[i]) {
+		case let v: struct_value =>
+			free(v.name);
+			type_finish(v._type);
+			expr_finish(v.init);
+		case let c: *struct_constant =>
+			struct_constant_finish(*c);
+			free(c);
+		};
+	};
+	free(s.fields);
+};

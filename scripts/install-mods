@@ -1,0 +1,46 @@
+#!/bin/sh
+modules="ascii
+bufio
+bytes
+crypto
+datetime
+dirs
+encoding
+endian
+errors
+fmt
+fnmatch
+format
+fs
+getopt
+glob
+hare
+hash
+io
+linux
+log
+math
+mime
+net
+os
+path
+regex
+rt
+shlex
+slices
+sort
+strconv
+strings
+strio
+temp
+time
+types
+unix
+uuid"
+IFS="
+"
+for mod in $modules
+do
+	printf 'install %s\n' "$mod"
+	cp -R $mod $1
+done
