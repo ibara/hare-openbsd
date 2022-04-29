@@ -5,4 +5,4 @@ _start:
 	mov x30, #0
 	mov x0, sp
 	add sp, x0, #-16
-	b rt.start_freebsd
+	b rt.start_openbsd
