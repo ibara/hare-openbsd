@@ -272,17 +272,6 @@ export fn fork() (int | void | errno) = {
 	};
 };
 
-export fn fexecve(fd: int, argv: *[*]nullable *const char,
-		envp: *[*]nullable *const char) errno = {
-	return match (wrap_return(syscall3(SYS_fexecve, fd: u64,
-		argv: uintptr: u64, envp: uintptr: u64))) {
-	case let err: errno =>
-		yield err;
-	case u64 =>
-		abort("unreachable");
-	};
-};
-
 export fn wait4(
 	pid: int,
 	wstatus: *int,
