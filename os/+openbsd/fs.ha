@@ -81,7 +81,7 @@ export fn access(path: str, mode: amode) (bool | fs::error) = {
 	};
 };
 
-// TODO: FreeBSD
+// TODO: OpenBSD
 // export fn mkfifo(path: str, mode: fs::mode) (void | fs::error) = {
 // export fn mkblk(
 // export fn mkchr(
