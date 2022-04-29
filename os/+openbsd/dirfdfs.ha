@@ -156,13 +156,13 @@ fn fsflags_to_bsd(flags: fs::flags) int = {
 		out |= rt::O_CLOEXEC;
 	};
 	if (flags & fs::flags::PATH > 0) {
-		abort("fs::flags::PATH is not supported on FreeBSD");
+		abort("fs::flags::PATH is not supported on OpenBSD");
 	};
 	if (flags & fs::flags::NOATIME > 0) {
-		abort("fs::flags::NOATIME is not supported on FreeBSD");
+		abort("fs::flags::NOATIME is not supported on OpenBSD");
 	};
 	if (flags & fs::flags::TMPFILE > 0) {
-		abort("fs::flags::TMPFILE is not supported on FreeBSD");
+		abort("fs::flags::TMPFILE is not supported on OpenBSD");
 	};
 	return out;
 };
@@ -384,7 +384,7 @@ fn iter_next(iter: *fs::iterator) (fs::dirent | void) = {
 		iter.buf_end = n;
 		iter.buf_pos = 0;
 	};
-	let de = &iter.buf[iter.buf_pos]: *rt::freebsd11_dirent;
+	let de = &iter.buf[iter.buf_pos]: *rt::dirent;
 	iter.buf_pos += de.d_reclen;
 	let name = strings::fromc(&de.d_name: *const char);
 
