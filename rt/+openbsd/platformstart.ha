@@ -1,7 +1,7 @@
 // License: MPL-2.0
 // (c) 2021 Drew DeVault <sir@cmpwn.com>
 
-export @noreturn fn start_freebsd(iv: *[*]uintptr) void = {
+export @noreturn fn start_openbsd(iv: *[*]uintptr) void = {
 	// TODO: Find & parse auxv
 	argc = iv[0]: size;
 	argv = &iv[1]: *[*]*char;
