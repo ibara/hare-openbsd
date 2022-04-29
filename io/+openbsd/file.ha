@@ -10,7 +10,7 @@ use strings;
 // require a [[file]] with some OS-level handle backing it - this type is used
 // for such APIs.
 //
-// On FreeBSD, [[io::file]] is a file descriptor.
+// On OpenBSD, [[io::file]] is a file descriptor.
 export type file = int;
 
 // Opens a Unix file descriptor as a file. This is a low-level interface, to
@@ -59,5 +59,5 @@ fn fd_seek(
 def SENDFILE_MAX: size = 2147479552z;
 
 fn fd_copy(to: file, from: file) (size | error) = {
-	abort(); // TODO: FreeBSD
+	abort(); // TODO: OpenBSD
 };
