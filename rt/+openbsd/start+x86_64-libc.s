@@ -2,4 +2,4 @@
 .global _start
 _start:
 	xor %rbp, %rbp
-	call rt.start_freebsd
+	call rt.start_openbsd
