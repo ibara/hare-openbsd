@@ -105,16 +105,10 @@ export fn strerror(err: errno) str = {
 		return "No message of desired type";
 	case EIDRM =>
 		return "Identifier removed";
-	case ETIME =>
-		return "Timer expired";
 	case EREMOTE =>
 		return "Object is remote";
-	case ENOLINK =>
-		return "Link has been severed";
 	case EPROTO =>
 		return "Protocol error";
-	case EMULTIHOP =>
-		return "Multihop attempted";
 	case EBADMSG =>
 		return "Bad message";
 	case EOVERFLOW =>
@@ -193,18 +187,10 @@ export fn strerror(err: errno) str = {
 		return "Authentication error";
 	case EBADRPC =>
 		return "RPC struct is bad";
-	case ECAPMODE =>
-		return "Not permitted in capability mode";
-	case EDOOFUS =>
-		return "Programming error";
-	case EINTEGRITY =>
-		return "Integrity check failed";
 	case ENEEDAUTH =>
 		return "Need authenticator";
 	case ENOATTR =>
 		return "Attribute not found";
-	case ENOTCAPABLE =>
-		return "Capabilities insufficient";
 	case EPROCLIM =>
 		return "Too many processes";
 	case EPROCUNAVAIL =>
@@ -309,16 +295,10 @@ export fn errname(err: errno) str = {
 		return "ENOMSG";
 	case EIDRM =>
 		return "EIDRM";
-	case ETIME =>
-		return "ETIME";
 	case EREMOTE =>
 		return "EREMOTE";
-	case ENOLINK =>
-		return "ENOLINK";
 	case EPROTO =>
 		return "EPROTO";
-	case EMULTIHOP =>
-		return "EMULTIHOP";
 	case EBADMSG =>
 		return "EBADMSG";
 	case EOVERFLOW =>
@@ -399,18 +379,10 @@ export fn errname(err: errno) str = {
 		return "EAUTH";
 	case EBADRPC =>
 		return "EBADRPC";
-	case ECAPMODE =>
-		return "ECAPMODE";
-	case EDOOFUS =>
-		return "EDOOFUS";
-	case EINTEGRITY =>
-		return "EINTEGRITY";
 	case ENEEDAUTH =>
 		return "ENEEDAUTH";
 	case ENOATTR =>
 		return "ENOATTR";
-	case ENOTCAPABLE =>
-		return "ENOTCAPABLE";
 	case EPROCLIM =>
 		return "EPROCLIM";
 	case EPROCUNAVAIL =>
