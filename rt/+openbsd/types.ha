@@ -94,7 +94,7 @@ export type st = struct {
 	flags: fflags_t,
 };
 
-export type freebsd11_stat = struct {
+export type stat = struct {
 	st_dev: u32,
 	st_ino: u32,
 	st_mode: mode_t,
@@ -114,7 +114,7 @@ export type freebsd11_stat = struct {
 	st_birthtim: timespec,
 };
 
-export type freebsd11_dirent = struct {
+export type dirent = struct {
 	d_fileno: u32,
 	d_reclen: u16,
 	d_type: u8,
